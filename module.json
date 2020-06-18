@@ -1,0 +1,21 @@
+{
+  "name": "long-rest-hd-healing",
+  "title": "Long Rest Hit Die Healing for D&D5e",
+  "description": "Changes long rests in the dnd5e system to only allow healing via hit dice",
+  "systems": ["dnd5e"],
+  "version": "1.0.0",
+  "author": "Cole Schultz (cole#9640)",
+  "esmodules": [
+    "lr-hd-healing.js"
+  ],
+  "minimumCoreVersion": "0.6.2",
+  "compatibleCoreVersion": "0.6.2",
+	"url": "https://github.com/schultzcole/FVTT-Long-Rest-HD-Healing-5e",
+	"manifest": "https://raw.githubusercontent.com/schultzcole/FVTT-Long-Rest-HD-Healing-5e/master/module.json",
+	"download": "https://github.com/schultzcole/FVTT-Long-Rest-HD-Healing-5e/archive/1.0.0.zip",
+	"license": "https://github.com/schultzcole/FVTT-Long-Rest-HD-Healing-5e/blob/1.0.0/LICENSE",
+	"readme": "https://github.com/schultzcole/FVTT-Long-Rest-HD-Healing-5e/blob/1.0.0/README.md",
+	"changelog": "https://github.com/schultzcole/FVTT-Long-Rest-HD-Healing-5e/blob/1.0.0/CHANGELOG.md"
+}
+
+ 
