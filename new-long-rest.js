@@ -17,7 +17,7 @@ export default class HDLongRestDialog extends ShortRestDialog {
                 label: "Rest",
                 callback: html => {
                   let newDay = false;
-                  if (game.settings.get("dnd5e", "restVariant") === "gritty")
+                  if (game.settings.get("dnd5e", "restVariant") !== "epic")
                     newDay = html.find('input[name="newDay"]')[0].checked;
                   resolve(newDay);
                 }

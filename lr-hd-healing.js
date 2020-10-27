@@ -16,12 +16,23 @@ Hooks.on("init", () => {
         default: "half",
     });
 
+    game.settings.register("long-rest-hd-healing", "recovery-mult-lr", {
+        name: "Slower Resources Recovery",
+        hint: "Recover half of the long rest items/feats/resources/spells uses and slots. (new day items are not affected by this)",
+        scope: "world",
+        config: true,
+        type: Boolean,
+        default: false,
+    });
+
     patch_longRest();
 });
 
 function patch_longRest() {
     Actor5e.prototype.longRest = async function ({ dialog = true, chat = true } = {}) {
         const data = this.data.data;
+        const recoveryMultSetting = game.settings.get("long-rest-hd-healing", "recovery-mult");
+        const recoveryMultLrSetting = game.settings.get("long-rest-hd-healing", "recovery-mult-lr");
 
         // Take note of the initial hit points and number of hit dice the Actor has
         const hd0 = data.attributes.hd;
@@ -46,15 +57,26 @@ function patch_longRest() {
 
         // Recover character resources
         for (let [k, r] of Object.entries(data.resources)) {
-            if (r.max && (r.sr || r.lr)) {
+            if (r.max && (r.sr || (!recoveryMultLrSetting && r.lr))) {
                 updateData[`data.resources.${k}.value`] = r.max;
+            } else if (recoveryMultLrSetting && r.lr) {
+                const halfOfMax = Math.floor(r.max / 2) < 1 ? 1 : Math.floor(r.max / 2);
+                const recovered = r.value + halfOfMax > r.max ? r.max : r.value + halfOfMax;
+                updateData[`data.resources.${k}.value`] = recovered;
             }
         }
 
         // Recover spell slots
         for (let [k, v] of Object.entries(data.spells)) {
             if (!v.max && !v.override) continue;
-            updateData[`data.spells.${k}.value`] = v.override || v.max;
+            if (!recoveryMultLrSetting) {
+                updateData[`data.spells.${k}.value`] = v.override || v.max;
+            } else {
+                const max = v.override || v.max;
+                const halfOfMax = Math.floor(max / 2) < 1 ? 1 : Math.floor(max / 2);
+                const recovered = v.value + halfOfMax > max ? max : v.value + halfOfMax;
+                updateData[`data.spells.${k}.value`] = recovered;
+            }
         }
 
         // Recover pact slots.
@@ -62,7 +84,6 @@ function patch_longRest() {
         updateData["data.spells.pact.value"] = pact.override || pact.max;
 
         // Determine the number of hit dice which may be recovered
-        const recoveryMultSetting = game.settings.get("long-rest-hd-healing", "recovery-mult");
         let recoveryMultiplier = 0.5;
         switch (recoveryMultSetting) {
             case "quarter":
@@ -105,7 +126,13 @@ function patch_longRest() {
         for (let item of this.items) {
             const d = item.data.data;
             if (d.uses && recovery.includes(d.uses.per)) {
-                updateItems.push({ _id: item.id, "data.uses.value": d.uses.max });
+                if (!recoveryMultLrSetting || (recoveryMultLrSetting && ["sr", "day"].includes(d.uses.per))) {
+                    updateItems.push({ _id: item.id, "data.uses.value": d.uses.max });
+                } else if (recoveryMultLrSetting && d.uses.per === "lr") {
+                    const halfOfMax = Math.floor(d.uses.max / 2) < 1 ? 1 : Math.floor(d.uses.max / 2);
+                    const recovered = d.uses.value + halfOfMax > d.uses.max ? d.uses.max : d.uses.value + halfOfMax;
+                    updateItems.push({ _id: item.id, "data.uses.value": recovered });
+                }
             } else if (d.recharge && d.recharge.value) {
                 updateItems.push({ _id: item.id, "data.recharge.charged": true });
             }
