@@ -16,7 +16,6 @@ export default class HDLongRestDialog extends ShortRestDialog {
     return data;
   }
 
-
     static async hdLongRestDialog({actor}={}) {
         return new Promise((resolve, reject) => {
           const dlg = new this(actor, {
