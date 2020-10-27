@@ -16,13 +16,60 @@ Hooks.on("init", () => {
         default: "half",
     });
 
-    game.settings.register("long-rest-hd-healing", "recovery-mult-lr", {
-        name: "Slower Resources Recovery",
-        hint: "Recover half of the long rest items/feats/resources/spells uses and slots. (new day items are not affected by this)",
+    game.settings.register("long-rest-hd-healing", "recovery-mult-resources", {
+        name: "Resources Recovery Fraction",
+        hint: "The fraction of resources to recover on a long rest.",
         scope: "world",
         config: true,
-        type: Boolean,
-        default: false,
+        type: String,
+        choices: {
+            quarter: "Quarter",
+            half: "Half",
+            full: "Full (default)",
+        },
+        default: "full",
+    });
+
+    game.settings.register("long-rest-hd-healing", "recovery-mult-spells", {
+        name: "Spell Slots Recovery Fraction",
+        hint: "The fraction of spell slots to recover on a long rest (pact slots excluded).",
+        scope: "world",
+        config: true,
+        type: String,
+        choices: {
+            quarter: "Quarter",
+            half: "Half",
+            full: "Full (default)",
+        },
+        default: "full",
+    });
+
+    game.settings.register("long-rest-hd-healing", "recovery-mult-uses", {
+        name: "Uses Recovery Fraction",
+        hint: "The fraction of uses (item, feats, etc.) to recover on a long rest.",
+        scope: "world",
+        config: true,
+        type: String,
+        choices: {
+            quarter: "Quarter",
+            half: "Half",
+            full: "Full (default)",
+        },
+        default: "full",
+    });
+
+    game.settings.register("long-rest-hd-healing", "recovery-mult-day", {
+        name: "Daily uses Recovery Fraction",
+        hint: "The fraction of daily uses to recover on a long rest (items with the \"Day\" recovery setting).",
+        scope: "world",
+        config: true,
+        type: String,
+        choices: {
+            quarter: "Quarter",
+            half: "Half",
+            full: "Full (default)",
+        },
+        default: "full",
     });
 
     patch_longRest();
@@ -31,8 +78,6 @@ Hooks.on("init", () => {
 function patch_longRest() {
     Actor5e.prototype.longRest = async function ({ dialog = true, chat = true } = {}) {
         const data = this.data.data;
-        const recoveryMultSetting = game.settings.get("long-rest-hd-healing", "recovery-mult");
-        const recoveryMultLrSetting = game.settings.get("long-rest-hd-healing", "recovery-mult-lr");
 
         // Take note of the initial hit points and number of hit dice the Actor has
         const hd0 = data.attributes.hd;
@@ -48,35 +93,34 @@ function patch_longRest() {
             }
         }
 
-        // Recover hit points to full, and eliminate any existing temporary HP
-        const dhp = data.attributes.hp.value - hp0;
+        // Eliminate any existing temporary HP
         const updateData = {
             "data.attributes.hp.temp": 0,
             "data.attributes.hp.tempmax": 0,
         };
 
         // Recover character resources
+        const resourcesRecoveryMultSetting = game.settings.get("long-rest-hd-healing", "recovery-mult-resources");
+        const resourcesRecoveryMultiplier = determineLongRestMultiplier(resourcesRecoveryMultSetting);
+
         for (let [k, r] of Object.entries(data.resources)) {
-            if (r.max && (r.sr || (!recoveryMultLrSetting && r.lr))) {
+            if (r.max && r.sr) {
                 updateData[`data.resources.${k}.value`] = r.max;
-            } else if (recoveryMultLrSetting && r.lr) {
-                const halfOfMax = Math.floor(r.max / 2) < 1 ? 1 : Math.floor(r.max / 2);
-                const recovered = r.value + halfOfMax > r.max ? r.max : r.value + halfOfMax;
-                updateData[`data.resources.${k}.value`] = recovered;
+            } else if (r.max && r.lr) {
+                let recoverResources = Math.max(Math.floor(r.max * resourcesRecoveryMultiplier), 1);
+                updateData[`data.resources.${k}.value`] = Math.min(r.value + recoverResources, r.max);
             }
         }
 
         // Recover spell slots
+        const spellsRecoveryMultSetting = game.settings.get("long-rest-hd-healing", "recovery-mult-spells");
+        const spellsRecoveryMultiplier = determineLongRestMultiplier(spellsRecoveryMultSetting);
+
         for (let [k, v] of Object.entries(data.spells)) {
             if (!v.max && !v.override) continue;
-            if (!recoveryMultLrSetting) {
-                updateData[`data.spells.${k}.value`] = v.override || v.max;
-            } else {
-                const max = v.override || v.max;
-                const halfOfMax = Math.floor(max / 2) < 1 ? 1 : Math.floor(max / 2);
-                const recovered = v.value + halfOfMax > max ? max : v.value + halfOfMax;
-                updateData[`data.spells.${k}.value`] = recovered;
-            }
+            let spellMax = v.override || v.max;
+            let recoverSpells = Math.max(Math.floor(spellMax * spellsRecoveryMultiplier), 1);
+            updateData[`data.spells.${k}.value`] = Math.min(v.value + recoverSpells, spellMax);
         }
 
         // Recover pact slots.
@@ -84,22 +128,10 @@ function patch_longRest() {
         updateData["data.spells.pact.value"] = pact.override || pact.max;
 
         // Determine the number of hit dice which may be recovered
-        let recoveryMultiplier = 0.5;
-        switch (recoveryMultSetting) {
-            case "quarter":
-                recoveryMultiplier = 0.25;
-                break;
-            case "half":
-                recoveryMultiplier = 0.5;
-                break;
-            case "full":
-                recoveryMultiplier = 1.0;
-                break;
-            default:
-                throw new Error(`Unable to parse recovery multiplier setting, got "${recoveryMultSetting}".`);
-        }
+        const recoveryHDMultSetting = game.settings.get("long-rest-hd-healing", "recovery-mult");
+        const recoveryHDMultiplier = determineLongRestMultiplier(recoveryHDMultSetting);
 
-        let recoverHD = Math.max(Math.floor(data.details.level * recoveryMultiplier), 1);
+        let recoverHD = Math.max(Math.floor(data.details.level * recoveryHDMultiplier), 1);
         let dhd = 0;
 
         // Sort classes which can recover HD, assuming players prefer recovering larger HD first.
@@ -122,21 +154,35 @@ function patch_longRest() {
             }, []);
 
         // Iterate over owned items, restoring uses per day and recovering Hit Dice
+        const usesRecoveryMultSetting = game.settings.get("long-rest-hd-healing", "recovery-mult-uses");
+        const usesRecoveryMultiplier = determineLongRestMultiplier(usesRecoveryMultSetting);
+        const dayRecoveryMultSetting = game.settings.get("long-rest-hd-healing", "recovery-mult-day");
+        const dayRecoveryMultiplier = determineLongRestMultiplier(dayRecoveryMultSetting);
+
         const recovery = newDay ? ["sr", "lr", "day"] : ["sr", "lr"];
         for (let item of this.items) {
             const d = item.data.data;
             if (d.uses && recovery.includes(d.uses.per)) {
-                if (!recoveryMultLrSetting || (recoveryMultLrSetting && ["sr", "day"].includes(d.uses.per))) {
-                    updateItems.push({ _id: item.id, "data.uses.value": d.uses.max });
-                } else if (recoveryMultLrSetting && d.uses.per === "lr") {
-                    const halfOfMax = Math.floor(d.uses.max / 2) < 1 ? 1 : Math.floor(d.uses.max / 2);
-                    const recovered = d.uses.value + halfOfMax > d.uses.max ? d.uses.max : d.uses.value + halfOfMax;
-                    updateItems.push({ _id: item.id, "data.uses.value": recovered });
+                switch (d.uses.per) {
+                    case "lr":
+                        let recoverUses = Math.max(Math.floor(d.uses.max * usesRecoveryMultiplier), 1);
+                        updateItems.push({ _id: item.id, "data.uses.value": Math.min(d.uses.value + recoverUses, d.uses.max) });
+                        break;
+                    case "day":
+                        let recoverDay = Math.max(Math.floor(d.uses.max * dayRecoveryMultiplier), 1);
+                        updateItems.push({ _id: item.id, "data.uses.value": Math.min(d.uses.value + recoverDay, d.uses.max) });
+                        break;
+                    default:
+                        updateItems.push({ _id: item.id, "data.uses.value": d.uses.max });
+                        break;
                 }
             } else if (d.recharge && d.recharge.value) {
                 updateItems.push({ _id: item.id, "data.recharge.charged": true });
             }
         }
+
+        // Note the change in HP which occurred
+        const dhp = this.data.data.attributes.hp.value - hp0;
 
         // Perform the updates
         await this.update(updateData);
@@ -157,11 +203,16 @@ function patch_longRest() {
         }
 
         if (chat) {
+            let lrMessage = "DND5E.LongRestResultShort";
+            if ((dhp !== 0) && (dhd !== 0)) lrMessage = "DND5E.LongRestResult";
+            else if ((dhp !== 0) && (dhd === 0)) lrMessage = "DND5E.LongRestResultHitPoints";
+            else if ((dhp === 0) && (dhd !== 0)) lrMessage = "DND5E.LongRestResultHitDice";
+
             ChatMessage.create({
                 user: game.user._id,
                 speaker: { actor: this, alias: this.name },
                 flavor: restFlavor,
-                content: game.i18n.format("DND5E.LongRestResult", { name: this.name, health: dhp, dice: dhd }),
+                content: game.i18n.format(lrMessage, { name: this.name, health: dhp, dice: dhd })
             });
         }
 
@@ -174,4 +225,25 @@ function patch_longRest() {
             newDay: newDay,
         };
     };
+}
+
+// Recover the multiplier based on setting
+function determineLongRestMultiplier(multSetting) {
+    let recoveryMultiplier = 1;
+
+    switch (multSetting) {
+        case "quarter":
+            recoveryMultiplier = 0.25;
+            break;
+        case "half":
+            recoveryMultiplier = 0.5;
+            break;
+        case "full":
+            recoveryMultiplier = 1.0;
+            break;
+        default:
+            throw new Error(`Unable to parse recovery multiplier setting, got "${multSetting}".`);
+    }
+
+    return recoveryMultiplier;
 }

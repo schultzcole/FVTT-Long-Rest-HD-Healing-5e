@@ -11,7 +11,7 @@
     "lr-hd-healing.js"
   ],
   "minimumCoreVersion": "0.6.2",
-  "compatibleCoreVersion": "0.6.5",
+  "compatibleCoreVersion": "0.7.5",
   "url": "https://github.com/schultzcole/FVTT-Long-Rest-HD-Healing-5e",
   "manifest": "https://raw.githubusercontent.com/schultzcole/FVTT-Long-Rest-HD-Healing-5e/master/module.json",
   "download": "https://github.com/schultzcole/FVTT-Long-Rest-HD-Healing-5e/archive/1.1.0.zip",
