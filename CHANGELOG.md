@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## [2.0.0] 2020-11-07
+
+### FIXED
+
+- Fixed an issue which caused the amount of Hit Points healed to appear to be 0 in the chat message (thanks to DarKDinDoN for the fix).
+
+### ADDED
+
+- Configurable recovery multipliers for item uses, spell slots, and actor resources (thanks to DarKDinDoN 👏).
+
+### CHANGED
+
+- Bump compatible core version to 0.7.5.
+
 ## [1.1.0] 2020-08-03
 
 ### ADDED
