@@ -1,6 +1,6 @@
 # FVTT Long Rest Hit Dice Healing for D&D 5e
 
-Changes long rests in the dnd5e system to only allow healing via hit dice.
+Adds the "Slow Natural Healing" rules to the dnd5e system. Rather than healing to full hit points, actors now have the option to spend hit dice on a long rest.
 
 ## License
 
