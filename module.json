@@ -5,17 +5,17 @@
   "systems": [
     "dnd5e"
   ],
-  "version": "2.0.0",
+  "version": "2.1.0",
   "author": "Cole Schultz (cole#9640)",
   "esmodules": [
     "lr-hd-healing.js"
   ],
   "minimumCoreVersion": "0.6.2",
-  "compatibleCoreVersion": "0.7.5",
+  "compatibleCoreVersion": "0.7.7",
   "url": "https://github.com/schultzcole/FVTT-Long-Rest-HD-Healing-5e",
   "manifest": "https://raw.githubusercontent.com/schultzcole/FVTT-Long-Rest-HD-Healing-5e/master/module.json",
-  "download": "https://github.com/schultzcole/FVTT-Long-Rest-HD-Healing-5e/archive/2.0.0.zip",
-  "license": "https://github.com/schultzcole/FVTT-Long-Rest-HD-Healing-5e/blob/2.0.0/LICENSE",
-  "readme": "https://github.com/schultzcole/FVTT-Long-Rest-HD-Healing-5e/blob/2.0.0/README.md",
-  "changelog": "https://github.com/schultzcole/FVTT-Long-Rest-HD-Healing-5e/blob/2.0.0/CHANGELOG.md"
+  "download": "https://github.com/schultzcole/FVTT-Long-Rest-HD-Healing-5e/archive/2.1.0.zip",
+  "license": "https://github.com/schultzcole/FVTT-Long-Rest-HD-Healing-5e/blob/2.1.0/LICENSE",
+  "readme": "https://github.com/schultzcole/FVTT-Long-Rest-HD-Healing-5e/blob/2.1.0/README.md",
+  "changelog": "https://github.com/schultzcole/FVTT-Long-Rest-HD-Healing-5e/blob/2.1.0/CHANGELOG.md"
 }

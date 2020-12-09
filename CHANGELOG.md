@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [2.1.0] 2020-12-09
+
+### ADDED
+
+- Add "None" as an option for recharge levels.
+    - When "None" is selected, no resources/spell slots/item uses/etc will recharge on long rest (not even the minimum 1 that usually recharges).
+    - Note that this does not affect short rests.
+
 ## [2.0.0] 2020-11-07
 
 ### FIXED
