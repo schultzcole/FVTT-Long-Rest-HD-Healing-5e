@@ -9,6 +9,7 @@ Hooks.on("init", () => {
         config: true,
         type: String,
         choices: {
+            none: "None",
             quarter: "Quarter",
             half: "Half (default)",
             full: "Full",
@@ -23,6 +24,7 @@ Hooks.on("init", () => {
         config: true,
         type: String,
         choices: {
+            none: "None",
             quarter: "Quarter",
             half: "Half",
             full: "Full (default)",
@@ -37,6 +39,7 @@ Hooks.on("init", () => {
         config: true,
         type: String,
         choices: {
+            none: "None",
             quarter: "Quarter",
             half: "Half",
             full: "Full (default)",
@@ -51,6 +54,7 @@ Hooks.on("init", () => {
         config: true,
         type: String,
         choices: {
+            none: "None",
             quarter: "Quarter",
             half: "Half",
             full: "Full (default)",
@@ -65,6 +69,7 @@ Hooks.on("init", () => {
         config: true,
         type: String,
         choices: {
+            none: "None",
             quarter: "Quarter",
             half: "Half",
             full: "Full (default)",
@@ -103,12 +108,14 @@ function patch_longRest() {
         const resourcesRecoveryMultSetting = game.settings.get("long-rest-hd-healing", "recovery-mult-resources");
         const resourcesRecoveryMultiplier = determineLongRestMultiplier(resourcesRecoveryMultSetting);
 
-        for (let [k, r] of Object.entries(data.resources)) {
-            if (r.max && r.sr) {
-                updateData[`data.resources.${k}.value`] = r.max;
-            } else if (r.max && r.lr) {
-                let recoverResources = Math.max(Math.floor(r.max * resourcesRecoveryMultiplier), 1);
-                updateData[`data.resources.${k}.value`] = Math.min(r.value + recoverResources, r.max);
+        if (resourcesRecoveryMultiplier !== 0) {
+            for (let [k, r] of Object.entries(data.resources)) {
+                if (r.max && r.sr) {
+                    updateData[`data.resources.${k}.value`] = r.max;
+                } else if (r.max && r.lr) {
+                    let recoverResources = Math.max(Math.floor(r.max * resourcesRecoveryMultiplier), 1);
+                    updateData[`data.resources.${k}.value`] = Math.min(r.value + recoverResources, r.max);
+                }
             }
         }
 
@@ -116,11 +123,13 @@ function patch_longRest() {
         const spellsRecoveryMultSetting = game.settings.get("long-rest-hd-healing", "recovery-mult-spells");
         const spellsRecoveryMultiplier = determineLongRestMultiplier(spellsRecoveryMultSetting);
 
-        for (let [k, v] of Object.entries(data.spells)) {
-            if (!v.max && !v.override) continue;
-            let spellMax = v.override || v.max;
-            let recoverSpells = Math.max(Math.floor(spellMax * spellsRecoveryMultiplier), 1);
-            updateData[`data.spells.${k}.value`] = Math.min(v.value + recoverSpells, spellMax);
+        if (spellsRecoveryMultiplier !== 0) {
+            for (let [k, v] of Object.entries(data.spells)) {
+                if (!v.max && !v.override) continue;
+                let spellMax = v.override || v.max;
+                let recoverSpells = Math.max(Math.floor(spellMax * spellsRecoveryMultiplier), 1);
+                updateData[`data.spells.${k}.value`] = Math.min(v.value + recoverSpells, spellMax);
+            }
         }
 
         // Recover pact slots.
@@ -131,27 +140,31 @@ function patch_longRest() {
         const recoveryHDMultSetting = game.settings.get("long-rest-hd-healing", "recovery-mult");
         const recoveryHDMultiplier = determineLongRestMultiplier(recoveryHDMultSetting);
 
-        let recoverHD = Math.max(Math.floor(data.details.level * recoveryHDMultiplier), 1);
+        const updateItems = [];
         let dhd = 0;
+        if (recoveryHDMultiplier !== 0) {
+            let recoverHD = Math.max(Math.floor(data.details.level * recoveryHDMultiplier), 1);
 
-        // Sort classes which can recover HD, assuming players prefer recovering larger HD first.
-        const updateItems = this.items
-            .filter((item) => item.data.type === "class")
-            .sort((a, b) => {
-                let da = parseInt(a.data.data.hitDice.slice(1)) || 0;
-                let db = parseInt(b.data.data.hitDice.slice(1)) || 0;
-                return db - da;
-            })
-            .reduce((updates, item) => {
-                const d = item.data.data;
-                if (recoverHD > 0 && d.hitDiceUsed > 0) {
-                    let delta = Math.min(d.hitDiceUsed || 0, recoverHD);
-                    recoverHD -= delta;
-                    dhd += delta;
-                    updates.push({ _id: item.id, "data.hitDiceUsed": d.hitDiceUsed - delta });
-                }
-                return updates;
-            }, []);
+            // Sort classes which can recover HD, assuming players prefer recovering larger HD first.
+            const classItems = this.items
+                .filter((item) => item.data.type === "class")
+                .sort((a, b) => {
+                    let da = parseInt(a.data.data.hitDice.slice(1)) || 0;
+                    let db = parseInt(b.data.data.hitDice.slice(1)) || 0;
+                    return db - da;
+                })
+                .reduce((updates, item) => {
+                    const d = item.data.data;
+                    if (recoverHD > 0 && d.hitDiceUsed > 0) {
+                        let delta = Math.min(d.hitDiceUsed || 0, recoverHD);
+                        recoverHD -= delta;
+                        dhd += delta;
+                        updates.push({ _id: item.id, "data.hitDiceUsed": d.hitDiceUsed - delta });
+                    }
+                    return updates;
+                }, []);
+            updateItems.push(...classItems);
+        }
 
         // Iterate over owned items, restoring uses per day and recovering Hit Dice
         const usesRecoveryMultSetting = game.settings.get("long-rest-hd-healing", "recovery-mult-uses");
@@ -165,12 +178,16 @@ function patch_longRest() {
             if (d.uses && recovery.includes(d.uses.per)) {
                 switch (d.uses.per) {
                     case "lr":
-                        let recoverUses = Math.max(Math.floor(d.uses.max * usesRecoveryMultiplier), 1);
-                        updateItems.push({ _id: item.id, "data.uses.value": Math.min(d.uses.value + recoverUses, d.uses.max) });
+                        if (usesRecoveryMultiplier !== 0) {
+                            let recoverUses = Math.max(Math.floor(d.uses.max * usesRecoveryMultiplier), 1);
+                            updateItems.push({ _id: item.id, "data.uses.value": Math.min(d.uses.value + recoverUses, d.uses.max) });
+                        }
                         break;
                     case "day":
-                        let recoverDay = Math.max(Math.floor(d.uses.max * dayRecoveryMultiplier), 1);
-                        updateItems.push({ _id: item.id, "data.uses.value": Math.min(d.uses.value + recoverDay, d.uses.max) });
+                        if (dayRecoveryMultiplier !== 0) {
+                            let recoverDay = Math.max(Math.floor(d.uses.max * dayRecoveryMultiplier), 1);
+                            updateItems.push({ _id: item.id, "data.uses.value": Math.min(d.uses.value + recoverDay, d.uses.max) });
+                        }
                         break;
                     default:
                         updateItems.push({ _id: item.id, "data.uses.value": d.uses.max });
@@ -232,6 +249,9 @@ function determineLongRestMultiplier(multSetting) {
     let recoveryMultiplier = 1;
 
     switch (multSetting) {
+        case "none":
+            recoveryMultiplier = 0;
+            break;
         case "quarter":
             recoveryMultiplier = 0.25;
             break;
