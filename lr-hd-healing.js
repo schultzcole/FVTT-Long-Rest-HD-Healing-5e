@@ -143,7 +143,7 @@ function patch_longRest() {
         const updateItems = [];
         let dhd = 0;
         if (recoveryHDMultiplier !== 0) {
-            let recoverHD = Math.max(Math.floor(data.details.level * recoveryHDMultiplier), 1);
+            let recoverHD = Math.max(Math.ceil(data.details.level * recoveryHDMultiplier), 1);
 
             // Sort classes which can recover HD, assuming players prefer recovering larger HD first.
             const classItems = this.items
