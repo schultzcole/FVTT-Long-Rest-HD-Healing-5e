@@ -1,6 +1,6 @@
 {
   "name": "long-rest-hd-healing-round-up",
-  "title": "Long Rest Hit Die Healing for D&D5e With Rounding Up",
+  "title": "Long Rest Hit Die Healing for D&D5e with Rounding Up",
   "description": "Adds the \"Slow Natural Healing\" rules to the dnd5e system. Rather than healing to full hit points, actors now have the option to spend hit dice on a long rest. This alternate version rounds up the hit die recovered.",
   "systems": [
     "dnd5e"
