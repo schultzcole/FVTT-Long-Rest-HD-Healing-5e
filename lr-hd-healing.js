@@ -77,6 +77,19 @@ Hooks.on("init", () => {
         default: "full",
     });
 
+    game.settings.register("long-rest-hd-healing", "recovery-rounding", {
+        name: "Hit Dice Recovery Rounding",
+        hint: "How to round the number of hit dice recovered.",
+        scope: "world",
+        config: true,
+        type: String,
+        choices: {
+            down: "Round down (default)",
+            up: "Round up",
+        },
+        default: "down",
+    });
+
     patch_longRest();
 });
 
@@ -140,10 +153,13 @@ function patch_longRest() {
         const recoveryHDMultSetting = game.settings.get("long-rest-hd-healing", "recovery-mult");
         const recoveryHDMultiplier = determineLongRestMultiplier(recoveryHDMultSetting);
 
+        const recoveryHDRoundSetting = game.settings.get("long-rest-hd-healing", "recovery-rounding");
+        const recoveryHDRoundingFn = recoveryHDRoundSetting === "down" ? Math.floor : Math.ceil;
+
         const updateItems = [];
         let dhd = 0;
         if (recoveryHDMultiplier !== 0) {
-            let recoverHD = Math.max(Math.floor(data.details.level * recoveryHDMultiplier), 1);
+            let recoverHD = Math.max(recoveryHDRoundingFn(data.details.level * recoveryHDMultiplier), 1);
 
             // Sort classes which can recover HD, assuming players prefer recovering larger HD first.
             const classItems = this.items
