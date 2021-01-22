@@ -95,7 +95,7 @@ Hooks.on("init", () => {
 
 function patch_longRest() {
     libWrapper.register("long-rest-hd-healing", "CONFIG.Actor.entityClass.prototype.longRest", async function patchedLongRest(...args) {
-        let { dialog = true, chat = true } = args[0] ?? {};
+        let { dialog = true, chat = true, newDay = true } = args[0] ?? {};
         const data = this.data.data;
 
         // Take note of the initial hit points and number of hit dice the Actor has
@@ -103,7 +103,6 @@ function patch_longRest() {
         const hp0 = data.attributes.hp.value;
 
         // Maybe present a confirmation dialog
-        let newDay = false;
         if (dialog) {
             try {
                 newDay = await HDLongRestDialog.hdLongRestDialog({ actor: this, canRoll: hd0 > 0 });
@@ -236,6 +235,7 @@ function patch_longRest() {
                 break;
         }
 
+        // Determine the chat message to display
         if (chat) {
             let lrMessage = "DND5E.LongRestResultShort";
             if ((dhp !== 0) && (dhd !== 0)) lrMessage = "DND5E.LongRestResult";
