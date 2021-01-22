@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## [2.2.0] 2021-01-21
+
+### ADDED
+
+- Ability to select the rounding method (round up or down) used to calculate recovered hit dice (thanks to a-ws-m for the PR)
+
+### CHANGED
+
+- Add libWrapper support
+- Bump compatible core version
+
 ## [2.1.0] 2020-12-09
 
 ### ADDED
