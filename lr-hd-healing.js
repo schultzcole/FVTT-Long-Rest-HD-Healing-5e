@@ -1,5 +1,5 @@
-import Actor5e from "../../systems/dnd5e/module/actor/entity.js";
 import HDLongRestDialog from "./new-long-rest.js";
+import { libWrapper } from "./lib/libWrapper/shim.js";
 
 Hooks.on("init", () => {
     game.settings.register("long-rest-hd-healing", "recovery-mult", {
@@ -94,7 +94,8 @@ Hooks.on("init", () => {
 });
 
 function patch_longRest() {
-    Actor5e.prototype.longRest = async function ({ dialog = true, chat = true } = {}) {
+    libWrapper.register("long-rest-hd-healing", "CONFIG.Actor.entityClass.prototype.longRest", async function patchedLongRest(...args) {
+        let { dialog = true, chat = true } = args[0] ?? {};
         const data = this.data.data;
 
         // Take note of the initial hit points and number of hit dice the Actor has
@@ -257,7 +258,7 @@ function patch_longRest() {
             updateItems: updateItems,
             newDay: newDay,
         };
-    };
+    }, "OVERRIDE");
 }
 
 // Recover the multiplier based on setting
