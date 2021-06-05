@@ -2,6 +2,21 @@ import HDLongRestDialog from "./new-long-rest.js";
 import { libWrapper } from "./lib/libWrapper/shim.js";
 
 Hooks.on("init", () => {
+    game.settings.register("long-rest-hd-healing", "recovery-mult-hitpoints", {
+        name: "Hit Points Recovery Fraction",
+        hint: "The fraction missing hit points to recover on a long rest.",
+        scope: "world",
+        config: true,
+        type: String,
+        choices: {
+            none: "None (default)",
+            quarter: "Quarter",
+            half: "Half",
+            full: "Full",
+        },
+        default: "none",
+    });
+
     game.settings.register("long-rest-hd-healing", "recovery-mult", {
         name: "Hit Dice Recovery Fraction",
         hint: "The fraction of hit dice to recover on a long rest.",
@@ -108,6 +123,17 @@ function patch_newLongRest() {
             const hd0 = this.data.data.attributes.hd;
             const hp0 = this.data.data.attributes.hp.value;
 
+            // Before spending hit dice, recover a fraction of missing hit points (if applicable)
+            const hitPointsRecoveryMultSetting = game.settings.get("long-rest-hd-healing", "recovery-mult-hitpoints");
+            const hitPointsRecoveryMultiplier = determineLongRestMultiplier(hitPointsRecoveryMultSetting);
+
+            if (hitPointsRecoveryMultiplier) {
+                const maxHP = this.data.data.attributes.hp.max;
+                const recoveredHP = Math.floor((maxHP - hp0) * hitPointsRecoveryMultiplier);
+
+                await this.update({ "data.attributes.hp.value": hp0 + recoveredHP });
+            }
+
             // Maybe present a confirmation dialog
             if (dialog) {
                 try {
@@ -133,7 +159,7 @@ function patch_getRestHitPointRecovery() {
             const currentHP = this.data.data.attributes.hp.value;
             const result = wrapped(...args);
 
-            // Undo changes to hp
+            // Undo changes to hp from wrapped function
             result.updates["data.attributes.hp.value"] = currentHP;
             result.hitPointsRecovered = 0;
             return result;
