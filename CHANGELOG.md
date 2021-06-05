@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## [3.0.0] 2021-06-05
+
+*Core 0.8 and Dnd5e 1.3 compatibility)
+
+### ADDED
+
+- Added an option to recover a fraction of missing health on a long rest (defaults to none).
+
+### FIXED
+
+- Fixed an error that would occur when trying to long rest on 0.8.
+
 ## [2.2.0] 2021-01-21
 
 ### ADDED
