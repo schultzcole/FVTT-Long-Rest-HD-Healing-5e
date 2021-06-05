@@ -17,6 +17,19 @@ Hooks.on("init", () => {
         default: "half",
     });
 
+    game.settings.register("long-rest-hd-healing", "recovery-rounding", {
+        name: "Hit Dice Recovery Rounding",
+        hint: "How to round the number of hit dice recovered.",
+        scope: "world",
+        config: true,
+        type: String,
+        choices: {
+            down: "Round down (default)",
+            up: "Round up",
+        },
+        default: "down",
+    });
+
     game.settings.register("long-rest-hd-healing", "recovery-mult-resources", {
         name: "Resources Recovery Fraction",
         hint: "The fraction of resources to recover on a long rest.",
@@ -77,188 +90,177 @@ Hooks.on("init", () => {
         default: "full",
     });
 
-    game.settings.register("long-rest-hd-healing", "recovery-rounding", {
-        name: "Hit Dice Recovery Rounding",
-        hint: "How to round the number of hit dice recovered.",
-        scope: "world",
-        config: true,
-        type: String,
-        choices: {
-            down: "Round down (default)",
-            up: "Round up",
-        },
-        default: "down",
-    });
-
-    patch_longRest();
+    patch_newLongRest();
+    patch_getRestHitPointRecovery();
+    patch_getRestHitDiceRecovery();
+    patch_getRestResourceRecovery();
+    patch_getRestSpellRecovery();
+    patch_getRestItemUsesRecovery();
 });
 
-function patch_longRest() {
-    libWrapper.register("long-rest-hd-healing", "CONFIG.Actor.entityClass.prototype.longRest", async function patchedLongRest(...args) {
-        let { dialog = true, chat = true, newDay = true } = args[0] ?? {};
-        const data = this.data.data;
+function patch_newLongRest() {
+    libWrapper.register(
+        "long-rest-hd-healing",
+        "CONFIG.Actor.entityClass.prototype.longRest",
+        async function patchedLongRest(...args) {
+            let { chat=true, dialog=true, newDay=true } = args[0] ?? {};
 
-        // Take note of the initial hit points and number of hit dice the Actor has
-        const hd0 = data.attributes.hd;
-        const hp0 = data.attributes.hp.value;
+            const hd0 = this.data.data.attributes.hd;
+            const hp0 = this.data.data.attributes.hp.value;
 
-        // Maybe present a confirmation dialog
-        if (dialog) {
-            try {
-                newDay = await HDLongRestDialog.hdLongRestDialog({ actor: this, canRoll: hd0 > 0 });
-            } catch (err) {
-                return;
-            }
-        }
-
-        // Eliminate any existing temporary HP
-        const updateData = {
-            "data.attributes.hp.temp": 0,
-            "data.attributes.hp.tempmax": 0,
-        };
-
-        // Recover character resources
-        const resourcesRecoveryMultSetting = game.settings.get("long-rest-hd-healing", "recovery-mult-resources");
-        const resourcesRecoveryMultiplier = determineLongRestMultiplier(resourcesRecoveryMultSetting);
-
-        if (resourcesRecoveryMultiplier !== 0) {
-            for (let [k, r] of Object.entries(data.resources)) {
-                if (r.max && r.sr) {
-                    updateData[`data.resources.${k}.value`] = r.max;
-                } else if (r.max && r.lr) {
-                    let recoverResources = Math.max(Math.floor(r.max * resourcesRecoveryMultiplier), 1);
-                    updateData[`data.resources.${k}.value`] = Math.min(r.value + recoverResources, r.max);
+            // Maybe present a confirmation dialog
+            if (dialog) {
+                try {
+                    newDay = await HDLongRestDialog.hdLongRestDialog({ actor: this });
+                } catch (err) {
+                    return;
                 }
             }
-        }
 
-        // Recover spell slots
-        const spellsRecoveryMultSetting = game.settings.get("long-rest-hd-healing", "recovery-mult-spells");
-        const spellsRecoveryMultiplier = determineLongRestMultiplier(spellsRecoveryMultSetting);
+            const dhd = this.data.data.attributes.hd - hd0;
+            const dhp = this.data.data.attributes.hp.value - hp0;
+            return this._rest(chat, newDay, true, dhd, dhp);
+        },
+        "OVERRIDE",
+    );
+}
 
-        if (spellsRecoveryMultiplier !== 0) {
-            for (let [k, v] of Object.entries(data.spells)) {
-                if (!v.max && !v.override) continue;
+function patch_getRestHitPointRecovery() {
+    libWrapper.register(
+        "long-rest-hd-healing",
+        "CONFIG.Actor.entityClass.prototype._getRestHitPointRecovery",
+        function patched_getRestHitPointRecovery(wrapped, ...args) {
+            const currentHP = this.data.data.attributes.hp.value;
+            const result = wrapped(...args);
+
+            // Undo changes to hp
+            result.updates["data.attributes.hp.value"] = currentHP;
+            result.hitPointsRecovered = 0;
+            return result;
+        },
+        "WRAPPER",
+    );
+}
+
+function patch_getRestHitDiceRecovery() {
+    libWrapper.register(
+        "long-rest-hd-healing",
+        "CONFIG.Actor.entityClass.prototype._getRestHitDiceRecovery",
+        function patched_getRestHitDiceRecovery(wrapped, ...args) {
+            const { maxHitDice=undefined } = args[0] ?? {};
+
+            const recoveryHDMultSetting = game.settings.get("long-rest-hd-healing", "recovery-mult");
+            const recoveryHDMultiplier = determineLongRestMultiplier(recoveryHDMultSetting);
+
+            if (recoveryHDMultiplier === 0) return { updates: [], hitDiceRecovered: 0 };
+
+            const recoveryHDRoundSetting = game.settings.get("long-rest-hd-healing", "recovery-rounding");
+            const recoveryHDRoundingFn = recoveryHDRoundSetting === "down" ? Math.floor : Math.ceil;
+
+            const totalHitDice = this.data.data.details.level;
+            const hitDiceToRecover = Math.clamped(recoveryHDRoundingFn(totalHitDice * recoveryHDMultiplier), 1, maxHitDice ?? totalHitDice);
+            return wrapped({ maxHitDice: hitDiceToRecover });
+        },
+        "MIXED",
+    );
+}
+
+function patch_getRestResourceRecovery() {
+    libWrapper.register(
+        "long-rest-hd-healing",
+        "CONFIG.Actor.entityClass.prototype._getRestResourceRecovery",
+        function patched_getRestResourceRecovery(...args) {
+            const { recoverShortRestResources=true, recoverLongRestResources=true } = args[0] ?? {};
+
+            const resourcesRecoveryMultSetting = game.settings.get("long-rest-hd-healing", "recovery-mult-resources");
+            const resourcesRecoveryMultiplier = determineLongRestMultiplier(resourcesRecoveryMultSetting);
+
+            if (resourcesRecoveryMultiplier === 0) return {};
+
+            let updates = {};
+            for ( let [k, r] of Object.entries(this.data.data.resources) ) {
+                if (Number.isNumeric(r.max)) {
+                    if (recoverShortRestResources && r.sr) {
+                        updates[`data.resources.${k}.value`] = Number(r.max);
+                    } else if (recoverLongRestResources && r.lr) {
+                        let recoverResources = Math.max(Math.floor(r.max * resourcesRecoveryMultiplier), 1);
+                        updates[`data.resources.${k}.value`] = Math.min(r.value + recoverResources, r.max);
+                    }
+                }
+            }
+            return updates;
+        },
+        "OVERRIDE",
+    );
+}
+
+function patch_getRestSpellRecovery() {
+    libWrapper.register(
+        "long-rest-hd-healing",
+        "CONFIG.Actor.entityClass.prototype._getRestSpellRecovery",
+        function patched_getRestSpellRecovery(wrapped, ...args) {
+            const { recoverPact=true, recoverSpells=true } = args[0] ?? {};
+
+            const spellsRecoveryMultSetting = game.settings.get("long-rest-hd-healing", "recovery-mult-spells");
+            const spellsRecoveryMultiplier = determineLongRestMultiplier(spellsRecoveryMultSetting);
+
+            // Defer to the original method for recovering pact slots
+            const results = wrapped({ recoverPact, recoverSpells: false });
+
+            if (!recoverSpells || spellsRecoveryMultiplier === 0) return results;
+
+            // But overwrite the logic for recovering other spell slots
+            for ( let [k, v] of Object.entries(this.data.data.spells) ) {
+                if (!v.override && !v.max) continue;
                 let spellMax = v.override || v.max;
                 let recoverSpells = Math.max(Math.floor(spellMax * spellsRecoveryMultiplier), 1);
-                updateData[`data.spells.${k}.value`] = Math.min(v.value + recoverSpells, spellMax);
+                results[`data.spells.${k}.value`] = Math.min(v.value + recoverSpells, spellMax);
             }
-        }
 
-        // Recover pact slots.
-        const pact = data.spells.pact;
-        updateData["data.spells.pact.value"] = pact.override || pact.max;
+            return results;
+        },
+        "WRAPPER",
+    );
+}
 
-        // Determine the number of hit dice which may be recovered
-        const recoveryHDMultSetting = game.settings.get("long-rest-hd-healing", "recovery-mult");
-        const recoveryHDMultiplier = determineLongRestMultiplier(recoveryHDMultSetting);
+function patch_getRestItemUsesRecovery() {
+    libWrapper.register(
+        "long-rest-hd-healing",
+        "CONFIG.Actor.entityClass.prototype._getRestItemUsesRecovery",
+        function patched_getRestItemUsesRecovery(wrapped, ...args) {
+            const { recoverShortRestUses=true, recoverLongRestUses=true, recoverDailyUses=true } = args[0] ?? {};
 
-        const recoveryHDRoundSetting = game.settings.get("long-rest-hd-healing", "recovery-rounding");
-        const recoveryHDRoundingFn = recoveryHDRoundSetting === "down" ? Math.floor : Math.ceil;
+            const usesRecoveryMultSetting = game.settings.get("long-rest-hd-healing", "recovery-mult-uses");
+            const usesRecoveryMultiplier = determineLongRestMultiplier(usesRecoveryMultSetting);
+            const dayRecoveryMultSetting = game.settings.get("long-rest-hd-healing", "recovery-mult-day");
+            const dayRecoveryMultiplier = determineLongRestMultiplier(dayRecoveryMultSetting);
 
-        const updateItems = [];
-        let dhd = 0;
-        if (recoveryHDMultiplier !== 0) {
-            let recoverHD = Math.max(recoveryHDRoundingFn(data.details.level * recoveryHDMultiplier), 1);
+            const results = wrapped({ recoverShortRestUses, recoverLongRestUses: false, recoverDailyUses: false });
 
-            // Sort classes which can recover HD, assuming players prefer recovering larger HD first.
-            const classItems = this.items
-                .filter((item) => item.data.type === "class")
-                .sort((a, b) => {
-                    let da = parseInt(a.data.data.hitDice.slice(1)) || 0;
-                    let db = parseInt(b.data.data.hitDice.slice(1)) || 0;
-                    return db - da;
-                })
-                .reduce((updates, item) => {
-                    const d = item.data.data;
-                    if (recoverHD > 0 && d.hitDiceUsed > 0) {
-                        let delta = Math.min(d.hitDiceUsed || 0, recoverHD);
-                        recoverHD -= delta;
-                        dhd += delta;
-                        updates.push({ _id: item.id, "data.hitDiceUsed": d.hitDiceUsed - delta });
-                    }
-                    return updates;
-                }, []);
-            updateItems.push(...classItems);
-        }
-
-        // Iterate over owned items, restoring uses per day and recovering Hit Dice
-        const usesRecoveryMultSetting = game.settings.get("long-rest-hd-healing", "recovery-mult-uses");
-        const usesRecoveryMultiplier = determineLongRestMultiplier(usesRecoveryMultSetting);
-        const dayRecoveryMultSetting = game.settings.get("long-rest-hd-healing", "recovery-mult-day");
-        const dayRecoveryMultiplier = determineLongRestMultiplier(dayRecoveryMultSetting);
-
-        const recovery = newDay ? ["sr", "lr", "day"] : ["sr", "lr"];
-        for (let item of this.items) {
-            const d = item.data.data;
-            if (d.uses && recovery.includes(d.uses.per)) {
-                switch (d.uses.per) {
-                    case "lr":
-                        if (usesRecoveryMultiplier !== 0) {
+            for ( let item of this.items ) {
+                const d = item.data.data;
+                if (d.uses) {
+                    switch (d.uses.per) {
+                        case "lr":
+                            if (!recoverLongRestUses || usesRecoveryMultiplier === 0) break;
                             let recoverUses = Math.max(Math.floor(d.uses.max * usesRecoveryMultiplier), 1);
-                            updateItems.push({ _id: item.id, "data.uses.value": Math.min(d.uses.value + recoverUses, d.uses.max) });
-                        }
-                        break;
-                    case "day":
-                        if (dayRecoveryMultiplier !== 0) {
+                            results.push({ _id: item.id, "data.uses.value": Math.min(d.uses.value + recoverUses, d.uses.max) });
+                            break;
+                        case "day":
+                            if (!recoverDailyUses || dayRecoveryMultiplier === 0) break;
                             let recoverDay = Math.max(Math.floor(d.uses.max * dayRecoveryMultiplier), 1);
-                            updateItems.push({ _id: item.id, "data.uses.value": Math.min(d.uses.value + recoverDay, d.uses.max) });
-                        }
-                        break;
-                    default:
-                        updateItems.push({ _id: item.id, "data.uses.value": d.uses.max });
-                        break;
+                            results.push({ _id: item.id, "data.uses.value": Math.min(d.uses.value + recoverDay, d.uses.max) });
+                            break;
+                    }
+                } else if (recoverLongRestUses && d.recharge && d.recharge.value) {
+                    results.push({_id: item.id, "data.recharge.charged": true});
                 }
-            } else if (d.recharge && d.recharge.value) {
-                updateItems.push({ _id: item.id, "data.recharge.charged": true });
             }
-        }
 
-        // Note the change in HP which occurred
-        const dhp = this.data.data.attributes.hp.value - hp0;
-
-        // Perform the updates
-        await this.update(updateData);
-        if (updateItems.length) await this.updateEmbeddedEntity("OwnedItem", updateItems);
-
-        // Display a Chat Message summarizing the rest effects
-        let restFlavor;
-        switch (game.settings.get("dnd5e", "restVariant")) {
-            case "normal":
-                restFlavor = game.i18n.localize(newDay ? "DND5E.LongRestOvernight" : "DND5E.LongRestNormal");
-                break;
-            case "gritty":
-                restFlavor = game.i18n.localize("DND5E.LongRestGritty");
-                break;
-            case "epic":
-                restFlavor = game.i18n.localize("DND5E.LongRestEpic");
-                break;
-        }
-
-        // Determine the chat message to display
-        if (chat) {
-            let lrMessage = "DND5E.LongRestResultShort";
-            if ((dhp !== 0) && (dhd !== 0)) lrMessage = "DND5E.LongRestResult";
-            else if ((dhp !== 0) && (dhd === 0)) lrMessage = "DND5E.LongRestResultHitPoints";
-            else if ((dhp === 0) && (dhd !== 0)) lrMessage = "DND5E.LongRestResultHitDice";
-
-            ChatMessage.create({
-                user: game.user._id,
-                speaker: { actor: this, alias: this.name },
-                flavor: restFlavor,
-                content: game.i18n.format(lrMessage, { name: this.name, health: dhp, dice: dhd })
-            });
-        }
-
-        // Return data summarizing the rest effects
-        return {
-            dhd: dhd,
-            dhp: dhp,
-            updateData: updateData,
-            updateItems: updateItems,
-            newDay: newDay,
-        };
-    }, "OVERRIDE");
+            return results;
+        },
+        "WRAPPER",
+    );
 }
 
 // Recover the multiplier based on setting
