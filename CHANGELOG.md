@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## Unreleased
+
+### CHANGED
+- Compatibility with Foundry 0.8.6 (no longer compatibile with 0.7.x)
+
 ## [2.2.0] 2021-01-21
 
 ### ADDED

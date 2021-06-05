@@ -219,7 +219,7 @@ function patch_longRest() {
 
         // Perform the updates
         await this.update(updateData);
-        if (updateItems.length) await this.updateEmbeddedEntity("OwnedItem", updateItems);
+        if (updateItems.length) await this.updateEmbeddedDocuments("Item", updateItems);
 
         // Display a Chat Message summarizing the rest effects
         let restFlavor;
