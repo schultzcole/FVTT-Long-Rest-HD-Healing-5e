@@ -75,9 +75,24 @@ Hooks.on("init", () => {
         default: "full",
     });
 
-    game.settings.register("long-rest-hd-healing", "recovery-mult-uses", {
+    game.settings.register("long-rest-hd-healing", "recovery-mult-uses-feats", {
+        name: "Feat uses Recovery Fraction",
+        hint: "The fraction of feats uses to recover on a long rest.",
+        scope: "world",
+        config: true,
+        type: String,
+        choices: {
+            none: "None",
+            quarter: "Quarter",
+            half: "Half",
+            full: "Full (default)",
+        },
+        default: "full",
+    });
+
+    game.settings.register("long-rest-hd-healing", "recovery-mult-uses-others", {
         name: "Uses Recovery Fraction",
-        hint: "The fraction of uses (item, feats, etc.) to recover on a long rest.",
+        hint: "The fraction of other uses (items, consumables, etc.) to recover on a long rest.",
         scope: "world",
         config: true,
         type: String,
@@ -256,8 +271,10 @@ function patch_getRestItemUsesRecovery() {
         function patched_getRestItemUsesRecovery(wrapped, ...args) {
             const { recoverShortRestUses=true, recoverLongRestUses=true, recoverDailyUses=true } = args[0] ?? {};
 
-            const usesRecoveryMultSetting = game.settings.get("long-rest-hd-healing", "recovery-mult-uses");
-            const usesRecoveryMultiplier = determineLongRestMultiplier(usesRecoveryMultSetting);
+            const featsUsesRecoveryMultSetting = game.settings.get("long-rest-hd-healing", "recovery-mult-uses-feats");
+            const featsUsesRecoveryMultiplier = determineLongRestMultiplier(featsUsesRecoveryMultSetting);
+            const othersUsesRecoveryMultSetting = game.settings.get("long-rest-hd-healing", "recovery-mult-uses-others");
+            const othersUsesRecoveryMultiplier = determineLongRestMultiplier(othersUsesRecoveryMultSetting);
             const dayRecoveryMultSetting = game.settings.get("long-rest-hd-healing", "recovery-mult-day");
             const dayRecoveryMultiplier = determineLongRestMultiplier(dayRecoveryMultSetting);
 
@@ -268,9 +285,15 @@ function patch_getRestItemUsesRecovery() {
                 if (d.uses) {
                     switch (d.uses.per) {
                         case "lr":
-                            if (!recoverLongRestUses || usesRecoveryMultiplier === 0) break;
-                            let recoverUses = Math.max(Math.floor(d.uses.max * usesRecoveryMultiplier), 1);
-                            results.push({ _id: item.id, "data.uses.value": Math.min(d.uses.value + recoverUses, d.uses.max) });
+                            if(item.type === 'feat') {
+                                if (!recoverLongRestUses || featsUsesRecoveryMultiplier === 0) break;
+                                let recoverUses = Math.max(Math.floor(d.uses.max * featsUsesRecoveryMultiplier), 1);
+                                results.push({ _id: item.id, "data.uses.value": Math.min(d.uses.value + recoverUses, d.uses.max) });
+                            } else {
+                                if (!recoverLongRestUses || othersUsesRecoveryMultiplier === 0) break;
+                                let recoverUses = Math.max(Math.floor(d.uses.max * othersUsesRecoveryMultiplier), 1);
+                                results.push({ _id: item.id, "data.uses.value": Math.min(d.uses.value + recoverUses, d.uses.max) });
+                            }
                             break;
                         case "day":
                             if (!recoverDailyUses || dayRecoveryMultiplier === 0) break;
