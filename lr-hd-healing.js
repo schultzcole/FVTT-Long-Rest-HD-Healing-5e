@@ -75,9 +75,9 @@ Hooks.on("init", () => {
         default: "full",
     });
 
-    game.settings.register("long-rest-hd-healing", "recovery-mult-uses-feats", {
-        name: "Feat uses Recovery Fraction",
-        hint: "The fraction of feats uses to recover on a long rest.",
+    game.settings.register("long-rest-hd-healing", "recovery-mult-uses-others", {
+        name: "Item Uses Recovery Fraction",
+        hint: "The fraction of item uses (items, consumables, etc.) to recover on a long rest.",
         scope: "world",
         config: true,
         type: String,
@@ -90,9 +90,9 @@ Hooks.on("init", () => {
         default: "full",
     });
 
-    game.settings.register("long-rest-hd-healing", "recovery-mult-uses-others", {
-        name: "Uses Recovery Fraction",
-        hint: "The fraction of other uses (items, consumables, etc.) to recover on a long rest.",
+    game.settings.register("long-rest-hd-healing", "recovery-mult-uses-feats", {
+        name: "Feat uses Recovery Fraction",
+        hint: "The fraction of feat uses to recover on a long rest.",
         scope: "world",
         config: true,
         type: String,
@@ -281,35 +281,44 @@ function patch_getRestItemUsesRecovery() {
             const results = wrapped({ recoverShortRestUses, recoverLongRestUses: false, recoverDailyUses: false });
 
             for ( let item of this.items ) {
-                const d = item.data.data;
-                if (d.uses) {
-                    switch (d.uses.per) {
-                        case "lr":
-                            if(item.type === 'feat') {
-                                if (!recoverLongRestUses || featsUsesRecoveryMultiplier === 0) break;
-                                let recoverUses = Math.max(Math.floor(d.uses.max * featsUsesRecoveryMultiplier), 1);
-                                results.push({ _id: item.id, "data.uses.value": Math.min(d.uses.value + recoverUses, d.uses.max) });
-                            } else {
-                                if (!recoverLongRestUses || othersUsesRecoveryMultiplier === 0) break;
-                                let recoverUses = Math.max(Math.floor(d.uses.max * othersUsesRecoveryMultiplier), 1);
-                                results.push({ _id: item.id, "data.uses.value": Math.min(d.uses.value + recoverUses, d.uses.max) });
-                            }
-                            break;
-                        case "day":
-                            if (!recoverDailyUses || dayRecoveryMultiplier === 0) break;
-                            let recoverDay = Math.max(Math.floor(d.uses.max * dayRecoveryMultiplier), 1);
-                            results.push({ _id: item.id, "data.uses.value": Math.min(d.uses.value + recoverDay, d.uses.max) });
-                            break;
-                    }
-                } else if (recoverLongRestUses && d.recharge && d.recharge.value) {
-                    results.push({_id: item.id, "data.recharge.charged": true});
-                }
+                _recoverItemUses(
+                    item,
+                    recoverLongRestUses, recoverDailyUses,
+                    featsUsesRecoveryMultiplier, othersUsesRecoveryMultiplier, dayRecoveryMultiplier,
+                    results,
+                );
             }
 
             return results;
         },
         "WRAPPER",
     );
+
+    function _recoverItemUses(
+        item,
+        recoverLongRestUses, recoverDailyUses,
+        featsUsesRecoveryMultiplier, othersUsesRecoveryMultiplier, dayRecoveryMultiplier,
+        results,
+    ) {
+        const itemData = item.data.data;
+        if (itemData.uses) {
+            if (recoverLongRestUses && itemData.uses.per === "lr") {
+                const mult = item.type === "feat" ? featsUsesRecoveryMultiplier : othersUsesRecoveryMultiplier;
+                _recoverUses(item.id, itemData.uses.value, itemData.uses.max, mult, results);
+            } else if (recoverDailyUses && itemData.uses.per === "day") {
+                _recoverUses(item.id, itemData.uses.value, itemData.uses.max, dayRecoveryMultiplier, results);
+            }
+        } else if (recoverLongRestUses && itemData.recharge && itemData.recharge.value) {
+            results.push({ _id: item.id, "data.recharge.charged": true });
+        }
+    }
+
+    function _recoverUses(itemId, usesCurrentValue, usesMax, multiplier, results) {
+        if (multiplier === 0) return;
+        let amountToRecover = Math.max(Math.floor(usesMax * multiplier), 1);
+        let newValue = Math.min(usesCurrentValue + amountToRecover, usesMax);
+        results.push({ _id: itemId, "data.uses.value": newValue });
+    }
 }
 
 // Recover the multiplier based on setting
