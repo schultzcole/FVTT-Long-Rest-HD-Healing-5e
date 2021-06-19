@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## [3.1.0] 2021-06-19
+
+### ADDED
+
+- Added separate recovery multipliers for feats and other items (Thanks DarKDinDoN for the PR)
+
+### Changed
+
+- Bump core compatible version to 0.8.7.
+
 ## [3.0.0] 2021-06-05
 
 *Core 0.8 and Dnd5e 1.3 compatibility)
